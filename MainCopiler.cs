@@ -156,12 +156,12 @@ public class AstCodeGenerator
     private string GenerateDeclaration(VariableDeclarationNode decl)
     {
         return decl.Value != null
-            ? $"{decl.Type} {decl.Name} = {decl.Value.Value}"
+            ? $"{decl.Type} {decl.Name} = {decl.Value}"
             : $"{decl.Type} {decl.Name}";
     }
 
     private string GenerateAssignment(AssignmentNode assign)
     {
-        return $"{assign.VariableName} = {assign.Value.Value}";
+        return $"{assign.VariableName} = {assign.Value}";
     }
 }
