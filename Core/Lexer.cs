@@ -1,127 +1,13 @@
-﻿/// <summary>
-/// Convierte código fuente en una lista de tokens.
-/// </summary>
-
-//public class Lexer
-//{
-//    /// <summary>
-//    /// Tokeniza el código y filtra espacios/comentarios.
-//    /// </summary>
-//    public List<Token> Tokenize(string code)
-//    {
-//        List<Token> tokens = new List<Token>();
-//        int line = 1, column = 1;
-
-//        string[] rawTokens = Regex.Split(code, @"(\s+|\b|\W)");
-
-//        foreach (string rawToken in rawTokens)
-//        {
-//            if (string.IsNullOrWhiteSpace(rawToken))
-//            {
-//                UpdatePosition(rawToken, ref line, ref column);
-//                continue;
-//            }
-
-//            tokens.Add(new Token
-//            {
-//                Value = rawToken.Trim(),
-//                Line = line,
-//                Column = column
-//            });
-
-//            column += rawToken.Length;
-//        }
-
-//        return tokens;
-//    }
-
-//    private void UpdatePosition(string text, ref int line, ref int column)
-//    {
-//        foreach (char c in text)
-//        {
-//            if (c == '\n') { line++; column = 1; }
-//            else column++;
-//        }
-//    }
-//}
-
-//public class Lexer
-//{
-//    private readonly Dictionary<string, Token.TokenCategory> _keywordCategories = new()
-//    {
-//        // Tipos
-//        { "ENT", Token.TokenCategory.Type },
-//        { "DEC", Token.TokenCategory.Type },
-//        { "LYRIC", Token.TokenCategory.Type },
-//        { "BOL", Token.TokenCategory.Type },
-
-//        // Modificadores
-//        { "const", Token.TokenCategory.Modifier },
-
-//        // Palabras clave
-//        { "START", Token.TokenCategory.Keyword },
-//        { "END", Token.TokenCategory.Keyword },
-//        // ... agregar otras keywords
-//    };
-
-//    private readonly HashSet<char> _operators = new() { '+', '-', '*', '/', '=', '!', '>', '<', '&', '|' };
-//    private readonly HashSet<char> _symbols = new() { '{', '}', '(', ')', ';', ',' };
-
-//    public List<Token> Tokenize(string code)
-//    {
-//        List<Token> tokens = new();
-//        int line = 1, column = 1;
-
-//        string[] rawTokens = Regex.Split(code, @"(\s+|\b|\W)");
-
-//        foreach (string rawToken in rawTokens.Where(t => !string.IsNullOrWhiteSpace(t)))
-//        {
-//            string tokenValue = rawToken.Trim();
-//            var token = new Token
-//            {
-//                Value = tokenValue,
-//                Line = line,
-//                Column = column,
-//                Category = DetermineCategory(tokenValue)
-//            };
-
-//            tokens.Add(token);
-//            column += rawToken.Length;
-//        }
-//        return tokens;
-//    }
-
-//    private Token.TokenCategory DetermineCategory(string value)
-//    {
-//        if (_keywordCategories.TryGetValue(value, out var category))
-//            return category;
-
-//        if (value.Length == 1 && _operators.Contains(value[0]))
-//            return Token.TokenCategory.Operator;
-
-//        if (value.Length == 1 && _symbols.Contains(value[0]))
-//            return Token.TokenCategory.Symbol;
-
-//        if (Regex.IsMatch(value, @"^\d"))
-//            return Token.TokenCategory.Literal;
-
-//        return Token.TokenCategory.Identifier;
-//    }
-
-//    private void UpdatePosition(string text, ref int line, ref int column)
-//    {
-//        foreach (char c in text)
-//        {
-//            if (c == '\n') { line++; column = 1; }
-//            else column++;
-//        }
-//    }
-//}
-
-using System.Text.RegularExpressions;
+﻿using System;
+using System.Collections.Generic;
 
 public class Lexer
 {
+    private int _position;
+    private int _line = 1;
+    private int _column = 1;
+    private string _code;
+
     private readonly Dictionary<string, Token.TokenCategory> _keywordCategories = new()
     {
         { "FUNCTION", Token.TokenCategory.Keyword },
@@ -131,78 +17,117 @@ public class Lexer
         { "DEC", Token.TokenCategory.Type }
     };
 
-    //public List<Token> Tokenize(string code)
-    //{
-    //    List<Token> tokens = new();
-    //    int line = 1, column = 1;
-
-    //    string[] rawTokens = Regex.Split(code, @"(\s+|\b|\W)");
-
-    //    foreach (string rawToken in rawTokens.Where(t => !string.IsNullOrWhiteSpace(t)))
-    //    {
-    //        string normalizedValue = rawToken.Trim().ToUpper();
-    //        var token = new Token
-    //        {
-    //            Value = rawToken.Trim(),
-    //            Line = line,
-    //            Column = column,
-    //            Category = _keywordCategories.TryGetValue(normalizedValue, out var category)
-    //                      ? category
-    //                      : DetermineCategory(rawToken)
-    //        };
-
-    //        tokens.Add(token);
-    //        UpdatePosition(rawToken, ref line, ref column);
-    //    }
-    //    return tokens;
-    //}
+    private readonly HashSet<char> _symbols = new() { '+', '-', '*', '/', '=', '(', ')', '{', '}', ';' };
 
     public List<Token> Tokenize(string code)
     {
-        List<Token> tokens = new List<Token>();
-        int line = 1, column = 1;
+        _code = code;
+        _position = 0;
+        _line = 1;
+        _column = 1;
 
-        string[] rawTokens = Regex.Split(code, @"(\s+|\b|\W)");
+        var tokens = new List<Token>();
 
-        foreach (string rawToken in rawTokens.Where(t => !string.IsNullOrWhiteSpace(t)))
+        while (_position < _code.Length)
         {
-            string tokenValue = rawToken.Trim();
-            var token = new Token
-            {
-                Value = tokenValue,
-                Line = line,
-                Column = column,  // Asegura que la columna sea exacta
-                Category = DetermineCategory(tokenValue)
-            };
+            char current = _code[_position];
 
-            tokens.Add(token);
-            UpdatePosition(rawToken, ref line, ref column);  // Actualiza línea/columna
+            if (char.IsWhiteSpace(current))
+            {
+                HandleWhitespace(current);
+                continue;
+            }
+
+            if (char.IsDigit(current))
+            {
+                tokens.Add(ReadNumber());
+                continue;
+            }
+
+            if (_symbols.Contains(current))
+            {
+                tokens.Add(new Token
+                {
+                    Value = current.ToString(),
+                    Category = Token.TokenCategory.Symbol,
+                    Line = _line,
+                    Column = _column
+                });
+                _position++;
+                _column++;
+                continue;
+            }
+
+            if (char.IsLetter(current))
+            {
+                tokens.Add(ReadWord());
+                continue;
+            }
+
+            // Carácter no reconocido
+            _position++;
+            _column++;
         }
+
         return tokens;
     }
 
-    private void UpdatePosition(string text, ref int line, ref int column)
+    private Token ReadNumber()
     {
-        foreach (char c in text)
+        int start = _position;
+        while (_position < _code.Length && char.IsDigit(_code[_position]))
         {
-            if (c == '\n') { line++; column = 1; }
-            else column++;
+            _position++;
+            _column++;
         }
-    }
-    private Token.TokenCategory DetermineCategory(string value)
-    {
-        if (Regex.IsMatch(value, @"^\d")) return Token.TokenCategory.Literal;
-        if (value.Length == 1 && "+-*/=(){};".Contains(value))
-            return Token.TokenCategory.Symbol;
-        return Token.TokenCategory.Identifier;
+
+        return new Token
+        {
+            Value = _code.Substring(start, _position - start),
+            Category = Token.TokenCategory.Literal,
+            Line = _line,
+            Column = _column - (_position - start)
+        };
     }
 
-    //private void UpdatePosition(string text, ref int line, ref int column)
-    //{
-    //    foreach (char c in text)
-    //    {
-    //        if (c == '\n') { line++; column = 1; }
-    //        else column++;
-    //    }
-    //}
+    private Token ReadWord()
+    {
+        int start = _position;
+        while (_position < _code.Length && (char.IsLetterOrDigit(_code[_position]) || _code[_position] == '_'))
+        {
+            _position++;
+            _column++;
+        }
+
+        string word = _code.Substring(start, _position - start);
+        return new Token
+        {
+            Value = word,
+            Category = DetermineCategory(word),
+            Line = _line,
+            Column = _column - (word.Length)
+        };
+    }
+
+    private void HandleWhitespace(char c)
+    {
+        if (c == '\n')
+        {
+            _line++;
+            _column = 1;
+        }
+        else
+        {
+            _column++;
+        }
+        _position++;
+    }
+
+    private Token.TokenCategory DetermineCategory(string value)
+    {
+        if (_keywordCategories.TryGetValue(value.ToUpper(), out var category))
+            return category;
+
+        return Token.TokenCategory.Identifier;
+    }
 }

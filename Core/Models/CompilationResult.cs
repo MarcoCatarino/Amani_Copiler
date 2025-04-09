@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+﻿using Core.Models;
 
 namespace CompilerProject.Models
 {

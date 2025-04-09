@@ -1,5 +1,8 @@
-﻿using CompilerProject.Models;
-using Core;
+﻿using Core;
+using Core.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 public class MainCompiler
 {
@@ -9,91 +12,156 @@ public class MainCompiler
     public class CompilationResult
     {
         public bool Success { get; set; }
-        public List<CompilationError> Errors { get; set; } = new List<CompilationError>(); // Cambiar a CompilationError
-        public List<CompilationError> Warnings { get; set; } = new List<CompilationError>(); // Cambiar a CompilationError
-        public string OptimizedCode { get; set; } = string.Empty;
+        public List<CompilationError> Errors { get; set; } = new List<CompilationError>();
+        public List<CompilationError> Warnings { get; set; } = new List<CompilationError>();
+        public string OriginalCode { get; set; }
+        public string OptimizedCode { get; set; }
         public List<Token> Tokens { get; set; } = new List<Token>();
+        public AstNode Ast { get; set; }
+        public AstNode OptimizedAst { get; set; }
+        public TimeSpan ElapsedTime { get; set; }
     }
 
     public CompilationResult Compile(string code)
     {
-        var result = new CompilationResult();
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var result = new CompilationResult
+        {
+            OriginalCode = code
+        };
 
         try
         {
-            // 1. Tokenización
+            // Fase 1: Tokenización
             var lexer = new Lexer();
             result.Tokens = lexer.Tokenize(code);
 
-            // 2. Análisis sintáctico y semántico
-            var parser = new Parser(_symbolTable);
-            var parserErrors = parser.Parse(result.Tokens, code);
-            foreach (var error in parserErrors)
-            {
-                result.Errors.Add(ParseError(error, code));
-            }
+            // Fase 2: Análisis sintáctico y generación de AST
+            var parser = new Parser(_symbolTable, _errorHandler);
+            result.Ast = parser.Parse(result.Tokens);
 
-            // 3. Detección de variables no usadas (Advertencias)
-            var unusedVars = _symbolTable.GetUnusedVariables();  // Asegúrate de que esto devuelva objetos con 'DeclarationToken'
-            foreach (var variable in unusedVars)
-            {
-                var warning = new CompilationError
-                {
-                    Type = "Advertencia",
-                    Line = variable.DeclarationToken.Line,  // Asegúrate de que variable sea del tipo correcto
-                    Description = $"Variable '{variable.Name}' declarada pero no usada"
-                };
-                result.Warnings.Add(warning);
-            }
+            // Recoger errores y advertencias
+            result.Errors = _errorHandler.Errors;
+            result.Warnings = _errorHandler.Warnings;
+            result.Success = !_errorHandler.HasErrors;
 
-
-            // 4. Optimización (solo si no hay errores críticos)
-            if (!result.Errors.Any(e => e.Type == "Error" || e.Type == "Error de Tipo"))
+            // Fase 3: Optimización (solo si no hay errores)
+            if (result.Success)
             {
-                var optimizer = new Optimizer(_symbolTable);
-                List<Token> optimizedTokens = optimizer.Optimize(result.Tokens);
-                result.OptimizedCode = string.Join(" ", optimizedTokens.Select(t => t.Value));
-                result.Success = true;
+                // Optimización a nivel de AST
+                var astOptimizer = new AstOptimizer();
+                result.OptimizedAst = astOptimizer.Optimize(result.Ast);
+
+                // Generación de código optimizado
+                var codeGenerator = new AstCodeGenerator();
+                result.OptimizedCode = codeGenerator.Generate(result.OptimizedAst);
             }
+        }
+        catch (ParseError ex)
+        {
+            _errorHandler.AddError("Error Sintáctico", ex.Line ?? 0, ex.Message);
+            result.Success = false;
+        }
+        catch (SemanticError ex)
+        {
+            _errorHandler.AddError("Error Semántico", ex.Line ?? 0, ex.Message);
+            result.Success = false;
         }
         catch (Exception ex)
         {
-            result.Errors.Add(new CompilationError
-            {
-                Type = "Error Crítico",
-                Line = 0, // Línea desconocida
-                Description = ex.Message
-            });
+            _errorHandler.AddError("Error del Compilador", 0,
+                $"Error interno: {ex.GetType().Name} - {ex.Message}");
+            result.Success = false;
+        }
+        finally
+        {
+            stopwatch.Stop();
+            result.ElapsedTime = stopwatch.Elapsed;
+
+            // Limpiar estado para la próxima compilación
+            _symbolTable.Clear();
+            _errorHandler.Clear();
         }
 
         return result;
     }
+}
 
-    // Método para convertir un error a un objeto CompilationError
-    private CompilationError ParseError(string error, string code)
+// Nuevas clases auxiliares (deben ir en sus propios archivos)
+
+public class SemanticError : Exception
+{
+    public int? Line { get; }
+
+    public SemanticError(string message, int? line = null) : base(message)
     {
-        // Aquí debes hacer el parsing del error y extraer la línea, el tipo y la descripción.
-        // Este es un ejemplo general, que dependerá de cómo se estructuren los errores en tu parser.
+        Line = line;
+    }
+}
 
-        var lineNumber = ExtractLineNumber(error, code);
-        return new CompilationError
+public class AstOptimizer
+{
+    public AstNode Optimize(AstNode node)
+    {
+        return node switch
         {
-            Type = "Error",
-            Line = lineNumber,
-            Description = error
+            BlockNode block => OptimizeBlock(block),
+            VariableDeclarationNode decl => OptimizeDeclaration(decl),
+            AssignmentNode assign => OptimizeAssignment(assign),
+            _ => node
         };
     }
 
-    private int ExtractLineNumber(string error, string code)
+    private BlockNode OptimizeBlock(BlockNode block)
     {
-        // Aquí puedes extraer el número de línea del error basado en el formato de tu error string
-        // Si el error tiene "Línea 4:", extrae la línea
-        // Este es un ejemplo simplificado
-        var match = System.Text.RegularExpressions.Regex.Match(error, @"Línea (\d+):");
-        if (match.Success)
+        var optimized = new BlockNode();
+        foreach (var statement in block.Statements)
         {
-            return int.Parse(match.Groups[1].Value);
+            optimized.Statements.Add(Optimize(statement));
         }
-        return 0; // Si no se encuentra la línea, devolver 0
+        return optimized;
+    }
+
+    private VariableDeclarationNode OptimizeDeclaration(VariableDeclarationNode decl)
+    {
+        // Aquí irían optimizaciones como constant folding
+        return decl;
+    }
+
+    private AssignmentNode OptimizeAssignment(AssignmentNode assign)
+    {
+        // Optimizaciones de expresiones
+        return assign;
+    }
+}
+
+public class AstCodeGenerator
+{
+    public string Generate(AstNode node)
+    {
+        return node switch
+        {
+            BlockNode block => GenerateBlock(block),
+            VariableDeclarationNode decl => GenerateDeclaration(decl),
+            AssignmentNode assign => GenerateAssignment(assign),
+            _ => string.Empty
+        };
+    }
+
+    private string GenerateBlock(BlockNode block)
+    {
+        return string.Join("\n", block.Statements.Select(Generate));
+    }
+
+    private string GenerateDeclaration(VariableDeclarationNode decl)
+    {
+        return decl.Value != null
+            ? $"{decl.Type} {decl.Name} = {decl.Value.Value}"
+            : $"{decl.Type} {decl.Name}";
+    }
+
+    private string GenerateAssignment(AssignmentNode assign)
+    {
+        return $"{assign.VariableName} = {assign.Value.Value}";
     }
 }

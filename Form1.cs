@@ -154,15 +154,16 @@ $C{
         {
             if (lvErrors.SelectedItems.Count > 0)
             {
-                string lineStr = lvErrors.SelectedItems[0].SubItems[1].Text;
-                if (int.TryParse(lineStr, out int lineNum) && lineNum > 0)
+                var selectedItem = lvErrors.SelectedItems[0];
+                if (int.TryParse(selectedItem.SubItems[1].Text, out int lineNumber) && lineNumber > 0)
                 {
-                    int start = txtSourceCode.GetFirstCharIndexFromLine(lineNum - 1);
-                    if (start >= 0)
-                    {
-                        txtSourceCode.Select(start, 0);
-                        txtSourceCode.ScrollToCaret();
-                    }
+                    // Resaltar línea
+                    int startIndex = txtSourceCode.GetFirstCharIndexFromLine(lineNumber - 1);
+                    int lineLength = txtSourceCode.Lines[lineNumber - 1].Length;
+
+                    txtSourceCode.Select(startIndex, lineLength);
+                    txtSourceCode.SelectionBackColor = Color.Yellow;
+                    txtSourceCode.ScrollToCaret();
                 }
             }
         }
@@ -185,6 +186,7 @@ $C{
                 lvErrors.Items.Clear();
                 ClearHighlights();
                 txtOptimizedCode.Clear();
+                UpdateStatus("Compilando...");
 
                 // Obtener código fuente
                 string userCode = txtSourceCode.Text;
@@ -192,34 +194,87 @@ $C{
                 // Validar código vacío
                 if (string.IsNullOrWhiteSpace(userCode))
                 {
-                    ShowError("No hay código para compilar");
+                    AddErrorToListView("Error", 0, "No hay código para compilar");
+                    UpdateStatus("Error: Código vacío");
                     return;
                 }
 
                 // Compilar
                 var result = _compiler.Compile(userCode);
 
-                // Debug: Mostrar tokens en consola
-                Console.WriteLine("=== TOKENS ===");
-                foreach (var token in result.Tokens)
-                {
-                    Console.WriteLine($"{token.Value} [{token.Category}] (Línea {token.Line})");
-                }
-
                 // Mostrar resultados
                 if (result.Success)
                 {
-                    ShowSuccess("¡Compilación exitosa!");
                     txtOptimizedCode.Text = result.OptimizedCode;
+                    AddSuccessToListView("Éxito", 0, "¡Compilación exitosa!");
+                    tabControl1.SelectedTab = tabOptimized;
+                    UpdateStatus("Compilación exitosa");
                 }
                 else
                 {
-                    ShowErrors(result.Errors);
+                    // Mostrar errores y advertencias
+                    foreach (var error in result.Errors)
+                    {
+                        AddErrorToListView(error.Type, error.Line, error.Description);
+                    }
+                    foreach (var warning in result.Warnings)
+                    {
+                        AddWarningToListView(warning.Type, warning.Line, warning.Description);
+                    }
+
+                    tabControl1.SelectedTab = tabErrors;
+                    UpdateStatus($"Compilación completada con {result.Errors.Count} errores y {result.Warnings.Count} advertencias");
                 }
             }
             catch (Exception ex)
             {
-                ShowError("Error inesperado: " + ex.Message);
+                AddErrorToListView("Error Crítico", 0, ex.Message);
+                UpdateStatus("Error durante la compilación");
+            }
+        }
+
+        // Métodos auxiliares nuevos:
+        private void AddErrorToListView(string type, int line, string description)
+        {
+            var item = new ListViewItem(type);
+            item.SubItems.Add(line.ToString());
+            item.SubItems.Add(description);
+            item.BackColor = Color.LightCoral;
+            lvErrors.Items.Add(item);
+
+            if (line > 0) HighlightErrorLine(line, Color.LightCoral);
+        }
+
+        private void AddWarningToListView(string type, int line, string description)
+        {
+            var item = new ListViewItem(type);
+            item.SubItems.Add(line.ToString());
+            item.SubItems.Add(description);
+            item.BackColor = Color.LightGoldenrodYellow;
+            lvErrors.Items.Add(item);
+
+            if (line > 0) HighlightErrorLine(line, Color.LightGoldenrodYellow);
+        }
+
+        private void AddSuccessToListView(string type, int line, string description)
+        {
+            var item = new ListViewItem(type);
+            item.SubItems.Add(line.ToString());
+            item.SubItems.Add(description);
+            item.BackColor = Color.LightGreen;
+            lvErrors.Items.Add(item);
+        }
+
+        private void HighlightErrorLine(int lineNumber, Color highlightColor)
+        {
+            if (lineNumber > 0 && lineNumber <= txtSourceCode.Lines.Length)
+            {
+                int start = txtSourceCode.GetFirstCharIndexFromLine(lineNumber - 1);
+                int length = txtSourceCode.Lines[lineNumber - 1].Length;
+
+                txtSourceCode.Select(start, length);
+                txtSourceCode.SelectionBackColor = highlightColor;
+                txtSourceCode.SelectionLength = 0;
             }
         }
 

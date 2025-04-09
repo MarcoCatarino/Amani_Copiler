@@ -65,8 +65,8 @@
             mainSplitContainer.Panel2.Controls.Add(tabControl1);
             mainSplitContainer.Panel2.Controls.Add(btnCompile);
             mainSplitContainer.Panel2.Controls.Add(btnClear);
-            mainSplitContainer.Size = new Size(1125, 885);
-            mainSplitContainer.SplitterDistance = 535;
+            mainSplitContainer.Size = new Size(1125, 859);
+            mainSplitContainer.SplitterDistance = 519;
             mainSplitContainer.SplitterWidth = 5;
             mainSplitContainer.TabIndex = 0;
             // 
@@ -77,9 +77,10 @@
             txtSourceCode.ForeColor = SystemColors.WindowText;
             txtSourceCode.Location = new Point(0, 0);
             txtSourceCode.Name = "txtSourceCode";
-            txtSourceCode.Size = new Size(1125, 535);
+            txtSourceCode.Size = new Size(1125, 519);
             txtSourceCode.TabIndex = 0;
             txtSourceCode.Text = "";
+            //txtSourceCode.TextChanged += txtSourceCode_TextChanged;
             // 
             // tabControl1
             // 
@@ -105,13 +106,17 @@
             // 
             // lvErrors
             // 
+            lvErrors.Columns.Add("Tipo", 100, HorizontalAlignment.Left);
+            lvErrors.Columns.Add("Línea", 70, HorizontalAlignment.Center);
+            lvErrors.Columns.Add("Descripción", 400, HorizontalAlignment.Left);
             lvErrors.Dock = DockStyle.Fill;
-            lvErrors.HideSelection = false;
+            lvErrors.FullRowSelect = true;
             lvErrors.Location = new Point(3, 3);
             lvErrors.Name = "lvErrors";
             lvErrors.Size = new Size(1111, 256);
             lvErrors.TabIndex = 0;
             lvErrors.UseCompatibleStateImageBehavior = false;
+            lvErrors.View = View.Details;
             lvErrors.DoubleClick += lvErrors_DoubleClick;
             // 
             // tabOptimized
@@ -137,7 +142,8 @@
             // 
             // btnCompile
             // 
-            btnCompile.Location = new Point(3, 380);
+            btnCompile.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            btnCompile.Location = new Point(10, 300);
             btnCompile.Name = "btnCompile";
             btnCompile.Size = new Size(150, 40);
             btnCompile.TabIndex = 0;
@@ -147,7 +153,8 @@
             // 
             // btnClear
             // 
-            btnClear.Location = new Point(160, 380);
+            btnClear.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            btnClear.Location = new Point(170, 300);
             btnClear.Name = "btnClear";
             btnClear.Size = new Size(150, 40);
             btnClear.TabIndex = 1;
@@ -157,17 +164,18 @@
             // 
             // statusStrip1
             // 
+            statusStrip1.ImageScalingSize = new Size(20, 20);
             statusStrip1.Items.AddRange(new ToolStripItem[] { lblStatus });
-            statusStrip1.Location = new Point(0, 863);
+            statusStrip1.Location = new Point(0, 859);
             statusStrip1.Name = "statusStrip1";
-            statusStrip1.Size = new Size(1125, 22);
+            statusStrip1.Size = new Size(1125, 26);
             statusStrip1.TabIndex = 1;
             statusStrip1.Text = "statusStrip1";
             // 
             // lblStatus
             // 
             lblStatus.Name = "lblStatus";
-            lblStatus.Size = new Size(112, 17);
+            lblStatus.Size = new Size(160, 20);
             lblStatus.Text = "Estado del compilador";
             // 
             // Form1

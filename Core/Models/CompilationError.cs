@@ -1,4 +1,4 @@
-﻿namespace CompilerProject.Models
+﻿namespace Core.Models
 {
     public class CompilationError
     {

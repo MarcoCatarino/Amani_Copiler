@@ -1,28 +1,28 @@
-﻿using System.Collections.Generic;
+﻿using Core.Models;
 
 namespace Core
 {
-    public class ErrorHandlers
+    public class ErrorHandler
     {
-        public List<string> Errors { get; private set; } = new List<string>();
-        public List<string> Warnings { get; private set; } = new List<string>();
+        public List<CompilationError> Errors { get; } = new List<CompilationError>();
+        public List<CompilationError> Warnings { get; } = new List<CompilationError>();
 
-        public void AddError(string error)
+        public void AddError(string type, int line, string description)
         {
-            Errors.Add(error);
+            Errors.Add(new CompilationError { Type = type, Line = line, Description = description });
         }
 
-        public void AddWarning(string warning)
+        public void AddWarning(string type, int line, string description)
         {
-            Warnings.Add(warning);
+            Warnings.Add(new CompilationError { Type = type, Line = line, Description = description });
         }
-
-        public bool HasErrors => Errors.Count > 0;
 
         public void Clear()
         {
             Errors.Clear();
             Warnings.Clear();
         }
+
+        public bool HasErrors => Errors.Count > 0;
     }
 }

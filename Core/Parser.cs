@@ -1,106 +1,194 @@
 ﻿using Core.Models;
-using System;
-using System.Text.RegularExpressions;
+using System.Collections.Generic;
 
 namespace Core
 {
     public class Parser
     {
-        private readonly SymbolTable symbolTable;
-        private readonly ErrorHandlers errorHandler;
+        private readonly SymbolTable _symbolTable;
+        private readonly ErrorHandler _errorHandler;
+        private List<Token> _tokens;
+        private int _currentPosition;
 
-        public Parser(SymbolTable table, ErrorHandlers errors)
+        public Parser(SymbolTable table, ErrorHandler errors)
         {
-            symbolTable = table;
-            errorHandler = errors;
+            _symbolTable = table;
+            _errorHandler = errors;
         }
 
-        public void AnalyzeLine(string line)
+        public AstNode Parse(List<Token> tokens)
         {
-            line = line.Trim();
+            _tokens = tokens;
+            _currentPosition = 0;
+            var programBlock = new BlockNode();
 
-            if (Regex.IsMatch(line, @"^(entero|decimal|cadena)\s+\w+\s*=")) // declaración
+            while (!IsAtEnd())
             {
-                var match = Regex.Match(line, @"^(entero|decimal|cadena)\s+(\w+)\s*=\s*(.+);?$");
-                if (match.Success)
+                var statement = ParseStatement();
+                if (statement != null)
                 {
-                    string tipo = match.Groups[1].Value;
-                    string nombre = match.Groups[2].Value;
-                    string valor = match.Groups[3].Value;
+                    programBlock.Statements.Add(statement);
+                }
+            }
 
-                    if (!symbolTable.AddSymbol(nombre, tipo))
-                    {
-                        errorHandler.AddError($"[ERROR] La variable '{nombre}' ya está declarada.");
+            CheckUnusedSymbols();
+            return programBlock;
+        }
+
+        private AstNode ParseStatement()
+        {
+            try
+            {
+                if (Match("ENT") || Match("DEC") || Match("CADENA"))
+                    return ParseVariableDeclaration();
+
+                if (Check(Token.TokenCategory.Identifier) && PeekNext(1)?.Value == "=")
+                    return ParseAssignment();
+
+                Advance(); // Skip unrecognized tokens
+                return null;
+            }
+            catch (ParseError error)
+            {
+                _errorHandler.AddError("Error Sintáctico", Current().Line, error.Message);
+                Synchronize();
+                return null;
+            }
+        }
+
+        private VariableDeclarationNode ParseVariableDeclaration()
+        {
+            var typeToken = Current();
+            Advance(); // Consume type (ENT/DEC/CADENA)
+
+            var nameToken = Consume(Token.TokenCategory.Identifier, "Se esperaba nombre de variable");
+
+            var node = new VariableDeclarationNode
+            {
+                Type = typeToken.Value,
+                Name = nameToken.Value,
+                Line = typeToken.Line,
+                Column = typeToken.Column
+            };
+
+            if (Match("="))
+            {
+                node.Value = ParseExpression();
+            }
+
+            _symbolTable.AddSymbol(node.Name, node.Type);
+            return node;
+        }
+
+        private AssignmentNode ParseAssignment()
+        {
+            var identifier = Consume(Token.TokenCategory.Identifier, "Se esperaba identificador");
+            Consume("=", "Se esperaba '=' después de identificador");
+
+            var node = new AssignmentNode
+            {
+                VariableName = identifier.Value,
+                Value = ParseExpression(),
+                Line = identifier.Line,
+                Column = identifier.Column
+            };
+
+            _symbolTable.MarkAsUsed(node.VariableName);
+            return node;
+        }
+
+        private AstNode ParseExpression()
+        {
+            // Versión simplificada - solo maneja literales e identificadores por ahora
+            if (Check(Token.TokenCategory.Literal) || Check(Token.TokenCategory.Identifier))
+            {
+                var token = Current();
+                Advance();
+                return new LiteralNode { Value = token };
+            }
+            throw new ParseError($"Expresión no válida en línea {Current().Line}");
+        }
+
+        #region Helpers
+
+        private bool Match(string expected)
+        {
+            if (!Check(expected)) return false;
+            Advance();
+            return true;
+        }
+
+        private Token Consume(string expected, string errorMessage)
+        {
+            if (Check(expected)) return Advance();
+            throw new ParseError(errorMessage);
+        }
+
+        private Token Consume(Token.TokenCategory category, string errorMessage)
+        {
+            if (Check(category)) return Advance();
+            throw new ParseError(errorMessage);
+        }
+
+        private bool Check(string expected) =>
+            !IsAtEnd() && Current().Value == expected;
+
+        private bool Check(Token.TokenCategory category) =>
+            !IsAtEnd() && Current().Category == category;
+
+        private Token Advance() =>
+            _tokens[_currentPosition++];
+
+        private bool IsAtEnd() =>
+            _currentPosition >= _tokens.Count;
+
+        private Token Current() =>
+            _tokens[_currentPosition];
+
+        private Token Previous() =>
+            _tokens[_currentPosition - 1];
+
+        private Token PeekNext(int lookahead = 1) =>
+            (_currentPosition + lookahead) < _tokens.Count ? _tokens[_currentPosition + lookahead] : null;
+
+        private void Synchronize()
+        {
+            Advance();
+            while (!IsAtEnd())
+            {
+                if (Previous().Value == ";") return;
+                switch (Current().Value)
+                {
+                    case "ENT":
+                    case "DEC":
+                    case "CADENA":
                         return;
-                    }
-
-                    if (!EsTipoCompatible(tipo, valor))
-                    {
-                        errorHandler.AddError($"[ERROR] Tipo incompatible en la asignación de '{nombre}'. Esperado: {tipo}.");
-                    }
                 }
-            }
-            else if (Regex.IsMatch(line, @"^\w+\s*=")) // reasignación
-            {
-                var match = Regex.Match(line, @"^(\w+)\s*=\s*(.+);?$");
-                if (match.Success)
-                {
-                    string nombre = match.Groups[1].Value;
-                    string valor = match.Groups[2].Value;
-
-                    var simbolo = symbolTable.GetSymbol(nombre);
-                    if (simbolo == null)
-                    {
-                        errorHandler.AddError($"[ERROR] Variable '{nombre}' no declarada.");
-                        return;
-                    }
-
-                    if (!EsTipoCompatible(simbolo.Type, valor))
-                    {
-                        errorHandler.AddError($"[ERROR] Asignación inválida para '{nombre}'. Tipo esperado: {simbolo.Type}.");
-                    }
-
-                    symbolTable.MarkAsUsed(nombre);
-                }
-            }
-            else if (Regex.IsMatch(line, @"^\w+\s*\(.*\);?$")) // función, ignorar
-            {
-                return;
-            }
-            else // posible uso de variable
-            {
-                foreach (var palabra in line.Split(new[] { ' ', ';', '+', '-', '*', '/', '(', ')' }, StringSplitOptions.RemoveEmptyEntries))
-                {
-                    var simbolo = symbolTable.GetSymbol(palabra);
-                    if (simbolo != null)
-                        symbolTable.MarkAsUsed(palabra);
-                }
+                Advance();
             }
         }
 
-        public void FinalizeAnalysis()
+        private void CheckUnusedSymbols()
         {
-            foreach (var symbol in symbolTable.GetUnusedSymbols())
+            foreach (var symbol in _symbolTable.GetUnusedSymbols())
             {
-                errorHandler.AddWarning($"[ADVERTENCIA] La variable '{symbol.Name}' fue declarada pero no utilizada.");
+                _errorHandler.AddWarning("Advertencia", symbol.Line,
+                    $"Variable '{symbol.Name}' declarada pero no utilizada");
             }
         }
 
-        private bool EsTipoCompatible(string tipo, string valor)
-        {
-            valor = valor.Trim();
+        #endregion
+    }
 
-            switch (tipo)
-            {
-                case "entero":
-                    return int.TryParse(valor, out _);
-                case "decimal":
-                    return decimal.TryParse(valor, out _);
-                case "cadena":
-                    return valor.StartsWith("\"") && valor.EndsWith("\"");
-                default:
-                    return false;
-            }
+    internal class ParseError : System.Exception
+    {
+        public int? Line { get; }
+
+        public ParseError(string message) : base(message) { }
+
+        public ParseError(string message, int? line) : base(message)
+        {
+            Line = line;
         }
     }
 }

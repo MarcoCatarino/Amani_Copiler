@@ -8,14 +8,11 @@ namespace Core
     {
         private Dictionary<string, Symbol> symbols = new Dictionary<string, Symbol>();
 
-        // Asumimos que 'Variable' es una clase que tiene 'Name' y 'DeclarationToken'
-        private List<Variable> variables = new List<Variable>();
-
-        public List<Variable> GetUnusedVariables()
-        {
-            // Lógica para obtener variables no usadas
-            return variables.Where(v => !v.IsUsed).ToList();  // Suponiendo que hay una propiedad 'IsUsed'
+        public List<Symbol> GetUnusedSymbols()
+        { 
+            return symbols.Values.Where(s => !s.IsUsed).ToList();
         }
+
         public bool AddSymbol(string name, string type)
         {
             if (!symbols.ContainsKey(name))
@@ -42,11 +39,6 @@ namespace Core
         {
             if (symbols.ContainsKey(name))
                 symbols[name].IsUsed = true;
-        }
-
-        public List<Symbol> GetUnusedSymbols()
-        {
-            return symbols.Values.Where(s => !s.IsUsed).ToList();
         }
 
         public void Clear()

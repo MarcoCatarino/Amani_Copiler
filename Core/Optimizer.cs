@@ -1,10 +1,7 @@
 ﻿using System.Linq;
-using Core;  // Si 'SymbolTable' está en Core
+using Core;
+using Core.Models;
 
-
-/// <summary>
-/// Aplica optimizaciones al código tokenizado
-/// </summary>
 public class Optimizer
 {
     private readonly SymbolTable _symbolTable;
@@ -14,9 +11,6 @@ public class Optimizer
         _symbolTable = symbolTable;
     }
 
-    /// <summary>
-    /// Aplica todas las optimizaciones disponibles
-    /// </summary>
     public List<Token> Optimize(List<Token> tokens)
     {
         var optimized = ConstantFolding(tokens);
@@ -50,7 +44,8 @@ public class Optimizer
                 {
                     Value = folded.ToString(),
                     Line = tokens[i].Line,
-                    Column = tokens[i].Column
+                    Column = tokens[i].Column,
+                    Category = tokens[i].Category // Mantener la misma categoría
                 });
                 i += 2;
             }
@@ -94,7 +89,8 @@ public class Optimizer
 
     private List<Token> RemoveUnusedVariables(List<Token> tokens)
     {
-        var unusedVars = _symbolTable.GetUnusedVariables().Select(symbol => symbol.Name).ToList();
+        // Cambio importante aquí:
+        var unusedVars = _symbolTable.GetUnusedSymbols().Select(symbol => symbol.Name).ToList();
         var result = new List<Token>();
 
         for (int i = 0; i < tokens.Count; i++)
